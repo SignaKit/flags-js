@@ -1,0 +1,66 @@
+{
+  "name": "@signakit/flags-react-native",
+  "version": "1.2.0",
+  "description": "Official React Native / Expo SDK for SignaKit Feature Flags",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SignaKit/flags-js.git",
+    "directory": "packages/react-native"
+  },
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "react-native": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "dependencies": {
+    "@signakit/flags-core": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src __tests__",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "peerDependencies": {
+    "@react-native-async-storage/async-storage": ">=1.0.0",
+    "react": ">=18.0.0",
+    "react-native": ">=0.74.0"
+  },
+  "peerDependenciesMeta": {
+    "@react-native-async-storage/async-storage": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@react-native-async-storage/async-storage": "^1.23.1",
+    "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/react": "^14.0.0",
+    "@types/jest": "^29.5.12",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.0.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.0.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-native": "^0.74.0",
+    "ts-jest": "^29.1.2",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.3"
+  }
+}
