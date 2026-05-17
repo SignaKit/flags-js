@@ -1,0 +1,218 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: publish-npm
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Detect which packages changed so publish jobs can be conditional.
+  # ---------------------------------------------------------------------------
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      flags-core:         ${{ steps.filter.outputs.flags-core }}
+      flags-node:         ${{ steps.filter.outputs.flags-node }}
+      flags-browser:      ${{ steps.filter.outputs.flags-browser }}
+      flags-react:        ${{ steps.filter.outputs.flags-react }}
+      flags-react-native: ${{ steps.filter.outputs.flags-react-native }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            flags-core:
+              - 'packages/core/**'
+            flags-node:
+              - 'packages/node/**'
+            flags-browser:
+              - 'packages/browser/**'
+            flags-react:
+              - 'packages/react/**'
+            flags-react-native:
+              - 'packages/react-native/**'
+
+  # ---------------------------------------------------------------------------
+  # Publish jobs — each only runs when its package changed, and skips if the
+  # version in package.json is already published on npm (idempotent).
+  # core is published first; the SDKs that depend on it wait for it.
+  # ---------------------------------------------------------------------------
+  publish-flags-core:
+    name: Publish flags-core
+    needs: changes
+    if: needs.changes.outputs.flags-core == 'true'
+    runs-on: ubuntu-latest
+    environment: publish
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo build --filter=@signakit/flags-core
+      - name: Publish if version is new
+        working-directory: packages/core
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version 2>/dev/null | grep -q "$VERSION"; then
+            echo "Version $VERSION already published — skipping."
+          else
+            pnpm publish --access public --no-git-checks --provenance
+          fi
+
+  publish-flags-node:
+    name: Publish flags-node
+    needs: [changes, publish-flags-core]
+    if: |
+      always() &&
+      needs.changes.outputs.flags-node == 'true' &&
+      (needs.publish-flags-core.result == 'success' || needs.publish-flags-core.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: publish
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo build --filter=@signakit/flags-node...
+      - name: Publish if version is new
+        working-directory: packages/node
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version 2>/dev/null | grep -q "$VERSION"; then
+            echo "Version $VERSION already published — skipping."
+          else
+            pnpm publish --access public --no-git-checks --provenance
+          fi
+
+  publish-flags-browser:
+    name: Publish flags-browser
+    needs: [changes, publish-flags-core]
+    if: |
+      always() &&
+      needs.changes.outputs.flags-browser == 'true' &&
+      (needs.publish-flags-core.result == 'success' || needs.publish-flags-core.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: publish
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo build --filter=@signakit/flags-browser...
+      - name: Publish if version is new
+        working-directory: packages/browser
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version 2>/dev/null | grep -q "$VERSION"; then
+            echo "Version $VERSION already published — skipping."
+          else
+            pnpm publish --access public --no-git-checks --provenance
+          fi
+
+  # flags-react has flags-browser as a peer dep — wait for it if it ran.
+  publish-flags-react:
+    name: Publish flags-react
+    needs: [changes, publish-flags-browser]
+    if: |
+      always() &&
+      needs.changes.outputs.flags-react == 'true' &&
+      (needs.publish-flags-browser.result == 'success' || needs.publish-flags-browser.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: publish
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo build --filter=@signakit/flags-react...
+      - name: Publish if version is new
+        working-directory: packages/react
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version 2>/dev/null | grep -q "$VERSION"; then
+            echo "Version $VERSION already published — skipping."
+          else
+            pnpm publish --access public --no-git-checks --provenance
+          fi
+
+  publish-flags-react-native:
+    name: Publish flags-react-native
+    needs: [changes, publish-flags-core]
+    if: |
+      always() &&
+      needs.changes.outputs.flags-react-native == 'true' &&
+      (needs.publish-flags-core.result == 'success' || needs.publish-flags-core.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: publish
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo build --filter=@signakit/flags-react-native...
+      - name: Publish if version is new
+        working-directory: packages/react-native
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version 2>/dev/null | grep -q "$VERSION"; then
+            echo "Version $VERSION already published — skipping."
+          else
+            pnpm publish --access public --no-git-checks --provenance
+          fi

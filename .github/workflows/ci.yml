@@ -1,0 +1,149 @@
+name: CI - Pull Request
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Detect which packages changed so downstream jobs can be conditional.
+  # Any change to core triggers all SDK jobs (they all depend on it).
+  # flags-react also triggers when flags-browser changes (peer dep).
+  # ---------------------------------------------------------------------------
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      flags-core:         ${{ steps.filter.outputs.flags-core }}
+      flags-node:         ${{ steps.filter.outputs.flags-node }}
+      flags-browser:      ${{ steps.filter.outputs.flags-browser }}
+      flags-react:        ${{ steps.filter.outputs.flags-react }}
+      flags-react-native: ${{ steps.filter.outputs.flags-react-native }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            flags-core:
+              - 'packages/core/**'
+            flags-node:
+              - 'packages/node/**'
+              - 'packages/core/**'
+            flags-browser:
+              - 'packages/browser/**'
+              - 'packages/core/**'
+            flags-react:
+              - 'packages/react/**'
+              - 'packages/browser/**'
+              - 'packages/core/**'
+            flags-react-native:
+              - 'packages/react-native/**'
+              - 'packages/core/**'
+
+  # ---------------------------------------------------------------------------
+  # SDK test jobs — each installs from the monorepo root and delegates to
+  # turbo, which builds workspace dependencies automatically before testing.
+  # ---------------------------------------------------------------------------
+  test-flags-core:
+    name: Test flags-core
+    needs: changes
+    if: needs.changes.outputs.flags-core == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo type-check test build --filter=@signakit/flags-core
+
+  test-flags-node:
+    name: Test flags-node
+    needs: changes
+    if: needs.changes.outputs.flags-node == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo type-check lint test build --filter=@signakit/flags-node...
+
+  test-flags-browser:
+    name: Test flags-browser
+    needs: changes
+    if: needs.changes.outputs.flags-browser == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo type-check lint test build --filter=@signakit/flags-browser...
+
+  test-flags-react:
+    name: Test flags-react
+    needs: changes
+    if: needs.changes.outputs.flags-react == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo type-check lint test build --filter=@signakit/flags-react...
+
+  test-flags-react-native:
+    name: Test flags-react-native
+    needs: changes
+    if: needs.changes.outputs.flags-react-native == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo type-check lint test build --filter=@signakit/flags-react-native...
+
+  # ---------------------------------------------------------------------------
+  # Gate job — always runs, fails if any test job failed or was cancelled.
+  # Add "CI / Gate" as the single required status check in branch protection.
+  # ---------------------------------------------------------------------------
+  gate:
+    name: Gate
+    runs-on: ubuntu-latest
+    needs:
+      - test-flags-core
+      - test-flags-node
+      - test-flags-browser
+      - test-flags-react
+      - test-flags-react-native
+    if: always()
+    steps:
+      - name: All required checks passed
+        run: |
+          results='${{ toJSON(needs.*.result) }}'
+          if echo "$results" | grep -qE '"failure"|"cancelled"'; then
+            echo "One or more test jobs failed or were cancelled."
+            exit 1
+          fi
+          echo "All checks passed or were skipped."
