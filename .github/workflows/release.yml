@@ -17,7 +17,7 @@ jobs:
     name: Detect changes
     runs-on: ubuntu-latest
     outputs:
-      flags-core:         ${{ steps.filter.outputs.flags-core | github.event_name == 'workflow_dispatch' }}
+      flags-core:         ${{ steps.filter.outputs.flags-core || github.event_name == 'workflow_dispatch' }}
       flags-node:         ${{ steps.filter.outputs.flags-node || github.event_name == 'workflow_dispatch' }}
       flags-browser:      ${{ steps.filter.outputs.flags-browser || github.event_name == 'workflow_dispatch' }}
       flags-react:        ${{ steps.filter.outputs.flags-react || github.event_name == 'workflow_dispatch' }}
